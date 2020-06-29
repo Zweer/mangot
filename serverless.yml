@@ -1,0 +1,67 @@
+service:
+  name: mangot
+# app and org for use with dashboard.serverless.com
+#app: your-app-name
+#org: your-org-name
+
+custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+  resourceNames:
+    tables:
+      users: ${self:service}-${self:provider.stage}-users
+
+# Add the serverless-webpack plugin
+plugins:
+  - serverless-webpack
+  - serverless-plugin-export-endpoints
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'eu-west-1'}
+  profile: nic
+  apiGateway:
+    minimumCompressionSize: 1024 # Enable gzip compression for responses > 1 KB
+  environment:
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    TELEGRAM_TOKEN: ${ssm:/mangot-telegram-token~true}
+    DYNAMODB_TABLE_USERS: ${self:custom.resourceNames.tables.users}
+
+functions:
+  testGetComics:
+    handler: src/handlers/test.getComics
+
+  testGetChapters:
+    handler: src/handlers/test.getChapters
+
+  testGetChapter:
+    handler: src/handlers/test.getChapter
+
+  telegram:
+    handler: src/handlers/telegram.handler
+    events:
+      - http:
+          method: post
+          path: telegram
+
+  telegramSetWebhook:
+    handler: src/handlers/telegram.setWebhook
+
+resources: # CloudFormation template syntax from here on.
+  Resources:
+    users:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.resourceNames.tables.users}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
